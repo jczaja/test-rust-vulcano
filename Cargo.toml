@@ -1,0 +1,25 @@
+[package]
+name = "test-rust-vulkano"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+spirv-builder = "0.6.1"
+
+# Compile build-dependencies in release mode with
+# the same settings as regular dependencies.
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 16
+
+[profile.dev.build-override]
+opt-level = 3
+
+[dependencies]
+vulkano = "0.33.0"
+vulkano-shaders = "0.33.0"
+
+[profile.dev]
+opt-level = 1 
