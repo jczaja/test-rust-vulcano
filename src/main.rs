@@ -63,7 +63,9 @@ fn main() {
     // Allocate buffer on GPU
     let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
 
-    let data_iter = 0..67108864u32;
+    const MAX_IDX : u32 = 1024*48*96*8; 
+                          
+    let data_iter = 0..MAX_IDX;
     let data_buffer = Buffer::from_iter(
         &memory_allocator,
         BufferCreateInfo {
@@ -121,7 +123,7 @@ fn main() {
     )
     .unwrap();
 
-    let work_group_counts = [1024, 1, 1];
+    let work_group_counts = [MAX_IDX/(768), 1, 1];
 
     command_buffer_builder
     .bind_pipeline_compute(compute_pipeline.clone())
@@ -147,14 +149,10 @@ fn main() {
 
     println!("Prime numbers:");
     let content = data_buffer.read().unwrap();
-    for (n, val) in content.iter().enumerate() {
-        //if *val != -1 {
-            println!("{}: {}",n,val);
-        //} else {
-        //    let _n = n;
-        //    let _val = *val;
-            //println!("{}: {}",n,0)
-        //}
+    for val in content.iter() {
+        if *val != 1 {
+            println!("{}",val);
+        }
     }
 }
 
