@@ -1,12 +1,13 @@
 use vulkano::VulkanLibrary;
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::device::{physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo, QueueFlags, };
+use vulkano::device::Properties;
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo,MemoryUsage};
 use vulkano::command_buffer::allocator::{ StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo, };
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo};
-use vulkano::sync::{self, GpuFuture};
+use vulkano::sync::{self, GpuFuture,PipelineStage};
 use vulkano::pipeline::ComputePipeline;
 
 use vulkano::pipeline::Pipeline;
@@ -15,6 +16,10 @@ use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 
 use vulkano::pipeline::PipelineBindPoint;
 
+use vulkano::query::{QueryControlFlags,QueryPool, QueryPoolCreateInfo,QueryResultFlags, QueryType};
+
+// TODO: inline assembly spirv
+// TODO: check caps int8, float, double
 
 fn main() {
     println!("Hello, world!");
@@ -63,7 +68,7 @@ fn main() {
     // Allocate buffer on GPU
     let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
 
-    const MAX_IDX : u32 = 1024*48*96*8; 
+    const MAX_IDX : u32 = 512*48*96*8; 
                           
     let data_iter = 0..MAX_IDX;
     let data_buffer = Buffer::from_iter(
@@ -111,6 +116,11 @@ fn main() {
     )
     .unwrap();
 
+    // Timestamp query to get measure of GPU execution of kernel
+    let qi = QueryPoolCreateInfo { query_count: 2, ..QueryPoolCreateInfo::query_type(QueryType::Timestamp) };
+    let query_pool = QueryPool::new(device.clone(),qi).expect("Error: Unable to create query pool");
+    let mut query_results = [0u64;2];
+
     let command_buffer_allocator = StandardCommandBufferAllocator::new(
         device.clone(),
         StandardCommandBufferAllocatorCreateInfo::default(),
@@ -123,18 +133,27 @@ fn main() {
     )
     .unwrap();
 
+    let timestamp_period = device.physical_device().properties().timestamp_period;
+
+    // reset query pool
     let work_group_counts = [MAX_IDX/(768), 1, 1];
+    unsafe {
+        command_buffer_builder.reset_query_pool(query_pool.clone(),0..2).expect("Error: unable to reset query pool");
+
 
     command_buffer_builder
     .bind_pipeline_compute(compute_pipeline.clone())
+    .write_timestamp(query_pool.clone(),0,PipelineStage::TopOfPipe).expect("Error setting first write timestamp on TOP OF PIPE")
     .bind_descriptor_sets(
         PipelineBindPoint::Compute,
         compute_pipeline.layout().clone(),
         descriptor_set_layout_index as u32,
         descriptor_set,
     )
+    .write_timestamp(query_pool.clone(),1,PipelineStage::BottomOfPipe).expect("Error setting second write timestamp on BOTTOM OF PIPE")
     .dispatch(work_group_counts)
     .unwrap();
+    }
 
     let command_buffer = command_buffer_builder.build().unwrap();
 
@@ -147,13 +166,27 @@ fn main() {
 
     future.wait(None).unwrap();  // None is an optional timeout
 
+    println!("PRE TIMESTAMPS Start: {}, End: {}, TimeStampPeriod: {}",query_results[0],query_results[1],timestamp_period);
+    query_pool.queries_range(0..2)
+                .unwrap()
+                .get_results(
+                    &mut query_results,
+                    QueryResultFlags::WAIT
+
+
+                )
+                .expect("Error getting queries");
+
+
+    println!("TIMESTAMPS Start: {}, End: {}, DIFF[ms]: {}",query_results[0],query_results[1],(timestamp_period as f64 * (query_results[1]-query_results[0]) as f64)/1000000.0);
+    
     println!("Prime numbers:");
-    let content = data_buffer.read().unwrap();
-    for val in content.iter() {
-        if *val != 1 {
-            println!("{}",val);
-        }
-    }
+//    let content = data_buffer.read().unwrap();
+//    for val in content.iter() {
+//        if *val != 1 {
+//            println!("{}",val);
+//        }
+//    }
 }
 
 
