@@ -21,6 +21,8 @@ use vulkano::query::{QueryControlFlags,QueryPool, QueryPoolCreateInfo,QueryResul
 // TODO: inline assembly spirv
 // TODO: check caps int8, float, double
 
+// So even after reboot I got this ExclusiveAfterInUse
+
 fn main() {
     println!("Hello, world!");
 
@@ -68,7 +70,8 @@ fn main() {
     // Allocate buffer on GPU
     let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
 
-    const MAX_IDX : u32 = 512*48*96*8; 
+    const MAX_IDX : u32 = 128*20*96*8; // 128*20*96*8 
+    
                           
     let data_iter = 0..MAX_IDX;
     let data_buffer = Buffer::from_iter(
@@ -130,6 +133,7 @@ fn main() {
         &command_buffer_allocator,
         queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
+        //CommandBufferUsage::MultipleSubmit,
     )
     .unwrap();
 
@@ -150,9 +154,8 @@ fn main() {
         descriptor_set_layout_index as u32,
         descriptor_set,
     )
-    .write_timestamp(query_pool.clone(),1,PipelineStage::BottomOfPipe).expect("Error setting second write timestamp on BOTTOM OF PIPE")
-    .dispatch(work_group_counts)
-    .unwrap();
+    .dispatch(work_group_counts).unwrap()
+    .write_timestamp(query_pool.clone(),1,PipelineStage::BottomOfPipe).expect("Error setting second write timestamp on BOTTOM OF PIPE");
     }
 
     let command_buffer = command_buffer_builder.build().unwrap();
@@ -167,15 +170,15 @@ fn main() {
     future.wait(None).unwrap();  // None is an optional timeout
 
     println!("PRE TIMESTAMPS Start: {}, End: {}, TimeStampPeriod: {}",query_results[0],query_results[1],timestamp_period);
-    query_pool.queries_range(0..2)
-                .unwrap()
-                .get_results(
-                    &mut query_results,
-                    QueryResultFlags::WAIT
+   query_pool.queries_range(0..2)
+               .unwrap()
+               .get_results(
+                   &mut query_results,
+                   QueryResultFlags::WAIT
 
 
-                )
-                .expect("Error getting queries");
+               )
+               .expect("Error getting queries");
 
 
     println!("TIMESTAMPS Start: {}, End: {}, DIFF[ms]: {}",query_results[0],query_results[1],(timestamp_period as f64 * (query_results[1]-query_results[0]) as f64)/1000000.0);
