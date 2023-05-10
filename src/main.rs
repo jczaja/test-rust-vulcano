@@ -70,7 +70,8 @@ fn main() {
     // Allocate buffer on GPU
     let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
 
-    const MAX_IDX : u32 = 128*20*96*8; // 128*20*96*8 
+    const MAX_IDX : u32 = 128*16*96*8; // 128*20*96*8 - This works for timestamp queries on TG2 ,
+                                       // bigger numbers make crash 
     
                           
     let data_iter = 0..MAX_IDX;
